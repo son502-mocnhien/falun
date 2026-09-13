@@ -23,44 +23,44 @@
       background: transparent;
     }
 
-    /* Khung hiển thị thời gian đếm ngược âm thanh */
+   /* Đưa đồng hồ đếm ngược lên góc trên hoặc phía trên bàn xoay */
     #timer-display {
       position: absolute;
-      bottom: 40px;
+      top: 20px; /* Chuyển từ bottom lên top */
       left: 50%;
       transform: translateX(-50%);
       color: #ffffff;
       font-family: Arial, sans-serif;
-      font-size: 24px;
+      font-size: 22px;
       font-weight: bold;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 8px 20px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 6px 16px;
       border-radius: 20px;
       display: none;
       pointer-events: none;
       letter-spacing: 2px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      z-index: 10;
     }
 
-    /* Khung thông báo đếm ngược 120s trước mốc hẹn giờ */
+   /* Đưa cảnh báo lên cao hơn nữa hoặc gom chung một góc */
     #warning-display {
       position: absolute;
-      top: 30px;
+      top: 70px; /* Nằm ngay phía dưới đồng hồ hoặc tùy chỉnh */
       left: 50%;
       transform: translateX(-50%);
       color: #ffeb3b;
       font-family: Arial, sans-serif;
-      font-size: 22px;
+      font-size: 18px;
       font-weight: bold;
-      background: rgba(0, 0, 0, 0.75);
-      padding: 10px 24px;
+      background: rgba(255, 0, 0, 0.8);
+      padding: 6px 16px;
       border-radius: 20px;
       display: none;
       pointer-events: none;
       letter-spacing: 1px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-      border: 2px solid #ff9800;
-      text-align: center;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      z-index: 10;
     }
   </style>
 </head>
@@ -75,7 +75,7 @@
 
   <!-- Các khung hiển thị thông tin -->
   <div id="timer-display">00:00</div>
-  <div id="warning-display">Sắp đến giờ phát: 120s</div>
+  <div id="warning-display">Sắp đến giờ Phát Chính Niệm: 120s</div>
 
   <script>
     const canvas = document.getElementById('c');

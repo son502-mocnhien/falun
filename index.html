@@ -85,22 +85,11 @@
     const timerDisplay = document.getElementById('timer-display');
     const warningDisplay = document.getElementById('warning-display');
 
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-
-    // Xóa dòng khai báo const SCALE = 30 cũ đi, thay bằng:
     let SCALE = 30;
     let outerR, centerR, smallR, orbitR, tableCanvasSize;
 
     function updateScaleAndSizes() {
-      // Tính toán SCALE dựa theo kích thước màn hình (ưu tiên chiều nhỏ hơn để không bị tràn)
       const minDimension = Math.min(window.innerWidth, window.innerHeight);
-      
-      // Trên điện thoại (màn hình nhỏ),SCALE sẽ tự thu nhỏ lại
       SCALE = minDimension < 768 ? minDimension / 25 : 30;
 
       outerR  = 9.1    * SCALE;  
@@ -111,22 +100,27 @@
       tableCanvasSize = Math.ceil((outerR + 25) * 2);
     }
 
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      updateScaleAndSizes(); // Cập nhật lại kích thước vòng quay khi đổi màn hình
-    }
-
-    // Gọi lần đầu tiên trước khi thiết lập Offscreen Canvas
+    // Khởi tạo kích thước ban đầu
     updateScaleAndSizes();
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
 
-    // Sau đó mới khởi tạo offscreenCanvas
+    // Khởi tạo offscreenCanvas sau khi đã có tableCanvasSize
     const offscreenCanvas = document.createElement('canvas');
     const offCtx = offscreenCanvas.getContext('2d');
     offscreenCanvas.width = tableCanvasSize;
     offscreenCanvas.height = tableCanvasSize;
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      updateScaleAndSizes();
+      
+      // Đồng bộ lại kích thước offscreen khi đổi hướng màn hình
+      offscreenCanvas.width = tableCanvasSize;
+      offscreenCanvas.height = tableCanvasSize;
+    }
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
 
     let tableAngle  = 0;
     let centerAngle = 0;
@@ -154,14 +148,6 @@
 
     const historyFrames = [];
     const MAX_HISTORY_FRAMES = 120; 
-
-    function createOffscreenCanvas() {
-      const oc = document.createElement('canvas');
-      const tableCanvasSize = Math.ceil((outerR + 25) * 2);
-      oc.width = tableCanvasSize;
-      oc.height = tableCanvasSize;
-      return oc;
-    }
 
     let particles = [];
 
@@ -237,13 +223,13 @@
 
     function renderTableToCanvas(targetCanvas, customHue) {
       const offCtx = targetCanvas.getContext('2d');
-      const tableCanvasSize = targetCanvas.width;
-      offCtx.clearRect(0, 0, tableCanvasSize, tableCanvasSize);
+      const tSize = targetCanvas.width;
+      offCtx.clearRect(0, 0, tSize, tSize);
       
       const tableColor = `hsl(${customHue % 360}, 85%, 55%)`;
 
       offCtx.save();
-      offCtx.translate(tableCanvasSize / 2, tableCanvasSize / 2);
+      offCtx.translate(tSize / 2, tSize / 2);
       offCtx.rotate(tableAngle);
 
       offCtx.beginPath();
@@ -303,7 +289,9 @@
       const CX = canvas.width / 2;
       const CY = canvas.height / 2;
 
-      const currentFrameCanvas = createOffscreenCanvas();
+      const currentFrameCanvas = document.createElement('canvas');
+      currentFrameCanvas.width = tableCanvasSize;
+      currentFrameCanvas.height = tableCanvasSize;
       renderTableToCanvas(currentFrameCanvas, colorHue);
 
       historyFrames.push(currentFrameCanvas);
@@ -328,11 +316,10 @@
       const CX = canvas.width / 2;
       const CY = canvas.height / 2;
 
-      // 1. Click vào hình tròn to ở tâm -> Bật/Tắt Audio 1
       const distToCenter = Math.hypot(mouseX - CX, mouseY - CY);
       if (distToCenter <= centerR) {
         if (audio.paused) {
-          audio2.pause(); // Tắt audio 2 nếu đang chạy
+          audio2.pause();
           audio2.currentTime = 0;
           audio.play().catch(e => console.log(e));
           timerDisplay.style.display = 'block';
@@ -344,7 +331,6 @@
         return;
       }
 
-      // 2. Click vào 1 trong 8 hình tròn nhỏ -> Bật/Tắt Audio 2
       for (let i = 0; i < 8; i++) {
         const a = (i * Math.PI / 4) - Math.PI / 2;
         const globalAngle = tableAngle + a;
@@ -354,7 +340,7 @@
         const distToSmall = Math.hypot(mouseX - smallX, mouseY - smallY);
         if (distToSmall <= smallR) {
           if (audio2.paused) {
-            audio.pause(); // Tắt audio 1 nếu đang chạy
+            audio.pause();
             audio.currentTime = 0;
             audio2.play().catch(e => console.log(e));
             timerDisplay.style.display = 'block';
@@ -368,7 +354,6 @@
       }
     });
 
-    // Cập nhật thời gian đếm ngược cho Audio đang chạy
     function updateTimerDisplay(targetAudio) {
       if (!targetAudio.paused && !isNaN(targetAudio.duration)) {
         const timeLeft = Math.max(0, targetAudio.duration - targetAudio.currentTime);
@@ -391,7 +376,6 @@
       audio2.currentTime = 0;
     });
 
-    // ===== HỆ THỐNG LỊCH TRÌNH & ĐẾM NGƯỢC 120s (GMT+7) =====
     const targetHours = [
       { h: 4, m: 55 },
       { h: 10, m: 55 },
@@ -412,7 +396,6 @@
         const targetTotalSec = target.h * 3600 + target.m * 60;
         const diffSec = targetTotalSec - currentTotalSec;
 
-        // Đúng thời điểm mốc (diffSec === 0) -> Auto play audio 2
         if (diffSec === 0) {
           if (audio2.paused) {
             audio.pause();
@@ -422,7 +405,6 @@
           }
         }
 
-        // Cửa sổ 120 giây trước mốc thời gian (từ 120s về 1s)
         if (diffSec > 0 && diffSec <= 120) {
           inWarningWindow = true;
           const targetTimeFormatted = `${String(target.h).padStart(2, '0')}:${String(target.m).padStart(2, '0')}`;

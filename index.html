@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bàn tròn xoay + Đa Âm Thanh & Đếm Ngược Lịch Trình</title>
+  <title>Pháp Luân Xoay Chuyển</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -68,10 +68,10 @@
   <canvas id="c"></canvas>
   
   <!-- Audio 1 (Vòng tròn to, có lặp lại loop) -->
-  <audio id="myAudio" src="PuDu.mp3" loop></audio>
+  <audio id="myAudio" src="https://media.falundafa.org/media1/media/dafa/music/128k/PuDu.mp3" loop></audio>
   
   <!-- Audio 2 (8 hình tròn nhỏ) -->
-  <audio id="audio2" src="fzn15.mp3"></audio>
+  <audio id="audio2" src="https://media.falundafa.org/media1/media/dafa/music/48k/fzn15.mp3"></audio>
 
   <!-- Các khung hiển thị thông tin -->
   <div id="timer-display">00:00</div>
@@ -92,11 +92,41 @@
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const SCALE = 30;
-    const outerR  = 9.1    * SCALE;  
-    const centerR = 4.5  * SCALE;  
-    const smallR  = 2.25 * SCALE;  
-    const orbitR  = 6.75 * SCALE;  
+    // Xóa dòng khai báo const SCALE = 30 cũ đi, thay bằng:
+    let SCALE = 30;
+    let outerR, centerR, smallR, orbitR, tableCanvasSize;
+
+    function updateScaleAndSizes() {
+      // Tính toán SCALE dựa theo kích thước màn hình (ưu tiên chiều nhỏ hơn để không bị tràn)
+      const minDimension = Math.min(window.innerWidth, window.innerHeight);
+      
+      // Trên điện thoại (màn hình nhỏ),SCALE sẽ tự thu nhỏ lại
+      SCALE = minDimension < 768 ? minDimension / 25 : 30;
+
+      outerR  = 9.1    * SCALE;  
+      centerR = 4.5  * SCALE;  
+      smallR  = 2.25 * SCALE;  
+      orbitR  = 6.75 * SCALE;  
+
+      tableCanvasSize = Math.ceil((outerR + 25) * 2);
+    }
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      updateScaleAndSizes(); // Cập nhật lại kích thước vòng quay khi đổi màn hình
+    }
+
+    // Gọi lần đầu tiên trước khi thiết lập Offscreen Canvas
+    updateScaleAndSizes();
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // Sau đó mới khởi tạo offscreenCanvas
+    const offscreenCanvas = document.createElement('canvas');
+    const offCtx = offscreenCanvas.getContext('2d');
+    offscreenCanvas.width = tableCanvasSize;
+    offscreenCanvas.height = tableCanvasSize;
 
     let tableAngle  = 0;
     let centerAngle = 0;

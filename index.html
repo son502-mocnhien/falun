@@ -1,1 +1,447 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bàn tròn xoay + Đa Âm Thanh & Đếm Ngược Lịch Trình</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
+    body {
+      background: #0003ad;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      background: transparent;
+    }
+
+    /* Khung hiển thị thời gian đếm ngược âm thanh */
+    #timer-display {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      font-size: 24px;
+      font-weight: bold;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 8px 20px;
+      border-radius: 20px;
+      display: none;
+      pointer-events: none;
+      letter-spacing: 2px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+    /* Khung thông báo đếm ngược 120s trước mốc hẹn giờ */
+    #warning-display {
+      position: absolute;
+      top: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #ffeb3b;
+      font-family: Arial, sans-serif;
+      font-size: 22px;
+      font-weight: bold;
+      background: rgba(0, 0, 0, 0.75);
+      padding: 10px 24px;
+      border-radius: 20px;
+      display: none;
+      pointer-events: none;
+      letter-spacing: 1px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      border: 2px solid #ff9800;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  
+  <!-- Audio 1 (Vòng tròn to, có lặp lại loop) -->
+  <audio id="myAudio" src="PuDu.mp3" loop></audio>
+  
+  <!-- Audio 2 (8 hình tròn nhỏ) -->
+  <audio id="audio2" src="fzn15.mp3"></audio>
+
+  <!-- Các khung hiển thị thông tin -->
+  <div id="timer-display">00:00</div>
+  <div id="warning-display">Sắp đến giờ phát: 120s</div>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const audio = document.getElementById('myAudio');
+    const audio2 = document.getElementById('audio2');
+    const timerDisplay = document.getElementById('timer-display');
+    const warningDisplay = document.getElementById('warning-display');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    const SCALE = 30;
+    const outerR  = 9.1    * SCALE;  
+    const centerR = 4.5  * SCALE;  
+    const smallR  = 2.25 * SCALE;  
+    const orbitR  = 6.75 * SCALE;  
+
+    let tableAngle  = 0;
+    let centerAngle = 0;
+    let spinAngle   = 0;
+
+    const SPEED_CENTER = (1 / 9) * 2 * Math.PI / 60;  
+    const SPEED_TABLE  = (1 / 9)  * 2 * Math.PI / 60;  
+    const SPEED_SMALL  = (1 / 5)  * 2 * Math.PI / 60;  
+
+    let direction = 1;
+    let accumulatedTurns = 0;
+
+    let colorHue = 0;
+    const COLOR_SPEED = 0.4;
+
+    const imgCenter   = new Image();
+    const imgCardinal = new Image();
+    const imgDiag1    = new Image();
+    const imgDiag2    = new Image();
+
+    imgCenter.src   = 'wan2.png';
+    imgCardinal.src = 'wan1.png';
+    imgDiag1.src    = 'yinyang1.png';
+    imgDiag2.src    = 'yinyang2.png';
+
+    const historyFrames = [];
+    const MAX_HISTORY_FRAMES = 120; 
+
+    function createOffscreenCanvas() {
+      const oc = document.createElement('canvas');
+      const tableCanvasSize = Math.ceil((outerR + 25) * 2);
+      oc.width = tableCanvasSize;
+      oc.height = tableCanvasSize;
+      return oc;
+    }
+
+    let particles = [];
+
+    function spawnParticle() {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.5 + Math.random() * 3;
+      const randomHistoryIndex = Math.floor(Math.random() * historyFrames.length);
+
+      particles.push({
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        scale: 0.01, 
+        maxScale: 0.05 + Math.random() * 0.1, 
+        alpha: 0,   
+        rot: Math.random() * Math.PI * 2,
+        vRot: (Math.random() - 0.5) * 0.02,
+        historyIndex: randomHistoryIndex 
+      });
+    }
+
+    function updateAndDrawParticles() {
+      if (Math.random() < 0.08) {
+        spawnParticle();
+      }
+
+      const CX = canvas.width / 2;
+      const CY = canvas.height / 2;
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.vRot;
+
+        const distFromCenter = Math.hypot(p.x - CX, p.y - CY);
+        p.scale = Math.min(p.maxScale, (distFromCenter / outerR) * p.maxScale);
+        p.alpha = Math.min(1, distFromCenter / (outerR * 0.4));
+
+        const frameIndex = p.historyIndex % historyFrames.length;
+        const targetCanvas = historyFrames[frameIndex];
+
+        if (targetCanvas) {
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot);
+          ctx.scale(p.scale, p.scale);
+          ctx.globalAlpha = p.alpha;
+          ctx.drawImage(targetCanvas, -targetCanvas.width / 2, -targetCanvas.height / 2);
+          ctx.restore();
+        }
+
+        if (p.x < -200 || p.x > canvas.width + 200 || p.y < -200 || p.y > canvas.height + 200) {
+          particles.splice(i, 1);
+        }
+      }
+    }
+
+    function drawImageInCircle(targetCtx, img, r) {
+      if (!img.complete || img.naturalWidth === 0) return;
+
+      targetCtx.save();
+      targetCtx.beginPath();
+      targetCtx.arc(0, 0, r, 0, Math.PI * 2);
+      targetCtx.closePath();
+      targetCtx.clip();
+
+      const size = r * 2;
+      targetCtx.drawImage(img, -r, -r, size, size);
+      targetCtx.restore();
+    }
+
+    function renderTableToCanvas(targetCanvas, customHue) {
+      const offCtx = targetCanvas.getContext('2d');
+      const tableCanvasSize = targetCanvas.width;
+      offCtx.clearRect(0, 0, tableCanvasSize, tableCanvasSize);
+      
+      const tableColor = `hsl(${customHue % 360}, 85%, 55%)`;
+
+      offCtx.save();
+      offCtx.translate(tableCanvasSize / 2, tableCanvasSize / 2);
+      offCtx.rotate(tableAngle);
+
+      offCtx.beginPath();
+      offCtx.arc(0, 0, outerR, 0, Math.PI * 2);
+      offCtx.fillStyle = tableColor;
+      offCtx.fill();
+
+      offCtx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+      offCtx.shadowBlur = 30;
+      offCtx.strokeStyle = '#FFFFFF';
+      offCtx.lineWidth = 6;
+      offCtx.stroke();
+      offCtx.shadowBlur = 0;
+
+      offCtx.save();
+      offCtx.rotate(centerAngle - tableAngle);
+      offCtx.beginPath();
+      offCtx.arc(0, 0, centerR, 0, Math.PI * 2);
+      offCtx.fillStyle = '#c41e3a';
+      offCtx.fill();
+      drawImageInCircle(offCtx, imgCenter, centerR);
+      offCtx.restore();
+
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI / 4) - Math.PI / 2;
+        const x = Math.cos(a) * orbitR;
+        const y = Math.sin(a) * orbitR;
+
+        offCtx.save();
+        offCtx.translate(x, y);
+        offCtx.rotate(spinAngle);
+
+        offCtx.beginPath();
+        offCtx.arc(0, 0, smallR, 0, Math.PI * 2);
+        offCtx.fillStyle = 'rgba(0, 0, 0, 0)';
+        offCtx.fill();
+
+        let img = null;
+        if (i === 0 || i === 2 || i === 4 || i === 6) {
+          img = imgCardinal;
+        } else if (i === 7 || i === 3) {
+          img = imgDiag1;
+        } else {
+          img = imgDiag2;
+        }
+
+        drawImageInCircle(offCtx, img, smallR);
+        offCtx.restore();
+      }
+
+      offCtx.restore();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const CX = canvas.width / 2;
+      const CY = canvas.height / 2;
+
+      const currentFrameCanvas = createOffscreenCanvas();
+      renderTableToCanvas(currentFrameCanvas, colorHue);
+
+      historyFrames.push(currentFrameCanvas);
+      if (historyFrames.length > MAX_HISTORY_FRAMES) {
+        historyFrames.shift();
+      }
+
+      updateAndDrawParticles();
+
+      ctx.save();
+      ctx.translate(CX, CY);
+      ctx.drawImage(currentFrameCanvas, -currentFrameCanvas.width / 2, -currentFrameCanvas.height / 2);
+      ctx.restore();
+    }
+
+    // ===== SỰ KIỆN CLICK =====
+    canvas.addEventListener('click', (event) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+
+      const CX = canvas.width / 2;
+      const CY = canvas.height / 2;
+
+      // 1. Click vào hình tròn to ở tâm -> Bật/Tắt Audio 1
+      const distToCenter = Math.hypot(mouseX - CX, mouseY - CY);
+      if (distToCenter <= centerR) {
+        if (audio.paused) {
+          audio2.pause(); // Tắt audio 2 nếu đang chạy
+          audio2.currentTime = 0;
+          audio.play().catch(e => console.log(e));
+          timerDisplay.style.display = 'block';
+        } else {
+          audio.pause();
+          audio.currentTime = 0;
+          timerDisplay.style.display = 'none';
+        }
+        return;
+      }
+
+      // 2. Click vào 1 trong 8 hình tròn nhỏ -> Bật/Tắt Audio 2
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI / 4) - Math.PI / 2;
+        const globalAngle = tableAngle + a;
+        const smallX = CX + Math.cos(globalAngle) * orbitR;
+        const smallY = CY + Math.sin(globalAngle) * orbitR;
+
+        const distToSmall = Math.hypot(mouseX - smallX, mouseY - smallY);
+        if (distToSmall <= smallR) {
+          if (audio2.paused) {
+            audio.pause(); // Tắt audio 1 nếu đang chạy
+            audio.currentTime = 0;
+            audio2.play().catch(e => console.log(e));
+            timerDisplay.style.display = 'block';
+          } else {
+            audio2.pause();
+            audio2.currentTime = 0;
+            timerDisplay.style.display = 'none';
+          }
+          return;
+        }
+      }
+    });
+
+    // Cập nhật thời gian đếm ngược cho Audio đang chạy
+    function updateTimerDisplay(targetAudio) {
+      if (!targetAudio.paused && !isNaN(targetAudio.duration)) {
+        const timeLeft = Math.max(0, targetAudio.duration - targetAudio.currentTime);
+        const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+        const seconds = Math.floor(timeLeft % 60).toString().padStart(2, '0');
+        timerDisplay.textContent = `${minutes}:${seconds}`;
+      }
+    }
+
+    audio.addEventListener('timeupdate', () => {
+      if (!audio.paused) updateTimerDisplay(audio);
+    });
+
+    audio2.addEventListener('timeupdate', () => {
+      if (!audio2.paused) updateTimerDisplay(audio2);
+    });
+
+    audio2.addEventListener('ended', () => {
+      timerDisplay.style.display = 'none';
+      audio2.currentTime = 0;
+    });
+
+    // ===== HỆ THỐNG LỊCH TRÌNH & ĐẾM NGƯỢC 120s (GMT+7) =====
+    const targetHours = [
+      { h: 4, m: 55 },
+      { h: 10, m: 55 },
+      { h: 16, m: 55 },
+      { h: 22, m: 55 }
+    ];
+
+    function checkScheduleAndCountdown() {
+      const now = new Date();
+      const options = { timeZone: 'Asia/Bangkok', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false };
+      const timeStr = new Intl.DateTimeFormat('en-GB', options).format(now);
+      const [h, m, s] = timeStr.split(':').map(Number);
+      const currentTotalSec = h * 3600 + m * 60 + s;
+
+      let inWarningWindow = false;
+
+      for (let target of targetHours) {
+        const targetTotalSec = target.h * 3600 + target.m * 60;
+        const diffSec = targetTotalSec - currentTotalSec;
+
+        // Đúng thời điểm mốc (diffSec === 0) -> Auto play audio 2
+        if (diffSec === 0) {
+          if (audio2.paused) {
+            audio.pause();
+            audio.currentTime = 0;
+            audio2.play().catch(e => console.log("Auto-play restricted:", e));
+            timerDisplay.style.display = 'block';
+          }
+        }
+
+        // Cửa sổ 120 giây trước mốc thời gian (từ 120s về 1s)
+        if (diffSec > 0 && diffSec <= 120) {
+          inWarningWindow = true;
+          const targetTimeFormatted = `${String(target.h).padStart(2, '0')}:${String(target.m).padStart(2, '0')}`;
+          warningDisplay.textContent = `Sắp đến giờ (${targetTimeFormatted}): còn ${diffSec}s`;
+          warningDisplay.style.display = 'block';
+        }
+      }
+
+      if (!inWarningWindow) {
+        warningDisplay.style.display = 'none';
+      }
+    }
+
+    setInterval(checkScheduleAndCountdown, 1000);
+
+    function animate() {
+      tableAngle  += direction * SPEED_TABLE;
+      centerAngle += direction * SPEED_CENTER;
+      spinAngle   += direction * SPEED_SMALL;
+
+      accumulatedTurns += Math.abs(SPEED_TABLE) / (2 * Math.PI);
+      if (accumulatedTurns >= 9) {
+        accumulatedTurns = 0;
+        direction = -direction;
+      }
+
+      colorHue += COLOR_SPEED;
+
+      draw();
+      requestAnimationFrame(animate);
+    }
+
+    let loaded = 0;
+    const totalImgs = 4;
+    function checkStart() {
+      loaded++;
+      if (loaded >= totalImgs) {
+        animate();
+      }
+    }
+
+    [imgCenter, imgCardinal, imgDiag1, imgDiag2].forEach(img => {
+      img.onload = checkStart;
+      img.onerror = checkStart; 
+    });
+
+    setTimeout(() => {
+      if (loaded < totalImgs) animate();
+    }, 1500);
+  </script>
+</body>
+</html>
